@@ -4,7 +4,7 @@ import socket
 import os
 
 # 监听主机，即监听那个网络接口，下面的为我的kali的ip
-host = "10.10.10.145"
+host = "192.168.106.129"
 
 # 创建原始套接字,然后绑定在公开接口上
 if  os.name == "nt":

@@ -27,35 +27,40 @@ def run_command(command):
         # 需要注意的是这个output变量并不是一个string，也就是说不能用string的一些函数，
         # 比如你想知道返回的输出中是否包含某个字符串,必须先对对象进行.decode()
     except:
-        output = "Failed to execute command.\r\n"
+        output = "Failed to execute command.\r\n".encode("gbk")
     # 将输出发送
     return output
 
-
+#服务端的操作
 def client_handler(client_socket):
     global upload
     global execute
     global command
 
     if len(upload_destination):  # 检查上传文件
+        print(upload_destination)
         # 读取所有的字符并写下目标
         file_buffer = ""
         while True:  # 持续读取数据直到没有符合的数据
-            data = client_socket.recv(1024)
+            data = client_socket.recv(1024).decode()
+            print(data)
+            file_buffer += data
 
-            if not data:
+            jixu = "jixu"
+            client_socket.send(jixu.encode("gbk"))
+
+            if data.strip() == "finish":
                 break
-            else:
-                file_buffer += data
 
-        try:
-            file_descriptor = open(upload_destination, "wb")  # 对文件进行二进制写操作
-            file_descriptor.write(file_buffer)  # 将file_buffer写入到文件里
-            file_descriptor.close()
+        # try:
+        file_descriptor = open(upload_destination, "w")  # 对文件进行二进制写操作
+        file_descriptor.write(file_buffer)  # 将file_buffer写入到文件里
+        file_descriptor.close()
 
-            client_socket.send("Successfully saved file to %s\r\n" % upload_destination)
-        except:
-            client_socket.send("Failed to save file to %s\r\n" % upload_destination)
+        v = f"Successfully saved file to {upload_destination}"
+        client_socket.send(v.encode("gbk"))
+        # except:
+        #     client_socket.send("Failed to save file to %s\r\n" % upload_destination)
 
     # 检查命令执行
     if len(execute):
@@ -66,18 +71,17 @@ def client_handler(client_socket):
     # 如果需要一个命令行shell,那么我们进入另一个循环
     if command:
         while True:
-            # 跳出一个窗口
-            client_socket.send("<BHP:#>")
 
-            cmd_buffer = ""
-            while "\n" not in cmd_buffer:
-                cmd_buffer += client_socket.recv(1024)
-            #  返回命令输出
-            response = run_command(cmd_buffer)
-            # 返回响应数据
-            client_socket.send(response)
+            # client_socket.send(b"<BHP:#>")  # 发送字节数据
+            # cmd_buffer = ""
+            # while "\n" not in cmd_buffer:
+            #     cmd_buffer += client_socket.recv(1024).decode()
+            cmd_buffer = client_socket.recv(1024).decode()
+            response = run_command(cmd_buffer)  # 先解码
+            print(response)
+            client_socket.send(response)  # 发送时重新编码
 
-
+#服务端
 def server_loop():
     global target
 
@@ -86,6 +90,7 @@ def server_loop():
         target = "0.0.0.0"
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((target, port))
     server.listen(5)
 
@@ -98,38 +103,38 @@ def server_loop():
 
 def client_sender(buffer):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #
+    # try:
+    # 连接到目标主机
+    client.connect((target, port))
 
-    try:
-        # 连接到目标主机
-        client.connect((target, port))
+    if len(buffer):
+        client.send(buffer.encode("gbk"))
 
-        if len(buffer):
-            client.send(buffer)
+    while True:  # 现在等待数据回传
+        recv_len = 1
+        response = ""
 
-        while True:  # 现在等待数据回传
-            recv_len = 1
-            response = ""
+        while recv_len:
+            data = client.recv(4096)
+            recv_len = len(data)
+            response += data.decode("gbk", errors="ignore")
 
-            while recv_len:
-                data = client.recv(4096)
-                recv_len = len(data)
-                response += data
+            if recv_len < 4096:
+                break
 
-                if recv_len < 4096:
-                    break
+        print(response)
 
-            print(response)
+        # 等待更多的输入
+        # buffer = raw_input("")
+        buffer = input("")
+        buffer += "\n"
 
-            # 等待更多的输入
-            # buffer = raw_input("")
-            buffer = input("")
-            buffer += "\n"
+        # 发送出去
+        client.send(buffer.encode("gbk"))
 
-            # 发送出去
-            client.send(buffer)
-
-    except:
-        print("[*] Exception! Exiting.")
+    # except:
+    #     print("[*] Exception! Exiting.")
 
     # 关闭连接
     client.close()
@@ -167,6 +172,8 @@ def main():
     try:  # 读取命令行选项,若没有该选项则显示用法
         opts, args = getopt.getopt(sys.argv[1:], "hle:t:p:cu:",
                                    ["help", "listen", "execute", "target", "port", "command", "upload"])
+        print(opts)
+        print(args)
     except getopt.GetoptError as err:
         print(str(err))
         usage()
@@ -190,7 +197,6 @@ def main():
             assert False, "Unhandled Option"
 
     if not listen and len(target) and port > 0:  # 我们是进行监听还是仅从标准输入读取数据并发送数据？
-
         # 从命令行读取内存数据
         # 这里将阻塞,所以不再向标准输入发送数据时发送CTRL-D
         buffer = sys.stdin.read()
@@ -206,3 +212,7 @@ def main():
 # 调用main函数
 if __name__ == "__main__":
     main()
+
+# python replacenetcat.py -t 0.0.0.0 -p 5555 -l -c
+# python 8.replacenetcat.py -t 192.168.106.129 -p 5555 -l -c
+#python 8.replacenetcat.py -t 192.168.106.129 -p 5555

@@ -17,7 +17,8 @@ def ssh_command(ip, user, passwd, command):
 
 
 def main():  # 此段代码可修改为    用户能控制输入的ip,user,passwd,command的值
-    ip = "192.168.0.1"
+    # ip = "192.168.0.1"
+    ip = "192.168.106.129"
     user = 'whoiam'
     passwd = 'what'
     command = 'ping www.baidu.com'
